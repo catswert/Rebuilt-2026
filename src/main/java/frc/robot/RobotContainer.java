@@ -19,8 +19,14 @@ import frc.robot.subsystems.Intake;
 import frc.robot.subsystems.Shooter;
 import frc.robot.subsystems.Turret;
 import frc.robot.subsystems.Vision;
+
 import com.pathplanner.lib.auto.NamedCommands;
 import com.pathplanner.lib.commands.PathPlannerAuto;
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import com.pathplanner.lib.auto.AutoBuilder;
+
+
 
 @Logged
 public class RobotContainer {
@@ -34,6 +40,7 @@ public class RobotContainer {
     public final Hood hood = new Hood();
     public final Shooter shooter = new Shooter();
     public final Vision vision = new Vision(drivetrain::addVisionMeasurement);
+    private final SendableChooser<Command> autoChooser;
 
     public final StateMachine stateMachine = new StateMachine(
             drivetrain, intake, indexer, turret, hood, shooter, vision,
@@ -54,6 +61,12 @@ public class RobotContainer {
         registerNamedCommands();
         configureDriverBindings();
         configureOperatorBindings();
+        autoChooser = AutoBuilder.buildAutoChooser();
+        SmartDashboard.putData("Auto Chooser", autoChooser);
+    }
+
+    public Command getAutonomousCommand() {
+        return autoChooser.getSelected();
     }
 
     private void configureDriverBindings() {
@@ -107,7 +120,4 @@ public class RobotContainer {
             () -> stateMachine.setClear(false)));
     }
 
-    public Command getAutonomousCommand() {
-        return new PathPlannerAuto("BlueLeftSweepShoot8Depot");
-    }
 }
