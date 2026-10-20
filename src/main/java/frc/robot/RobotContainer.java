@@ -5,6 +5,7 @@ import com.ctre.phoenix6.swerve.SwerveRequest;
 
 import edu.wpi.first.epilogue.Logged;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
@@ -17,7 +18,9 @@ import frc.robot.subsystems.Indexer;
 import frc.robot.subsystems.Intake;
 import frc.robot.subsystems.Shooter;
 import frc.robot.subsystems.Turret;
-import frc.robot.subsystems.Vision;;
+import frc.robot.subsystems.Vision;
+import com.pathplanner.lib.auto.NamedCommands;
+import com.pathplanner.lib.commands.PathPlannerAuto;
 
 @Logged
 public class RobotContainer {
@@ -48,6 +51,7 @@ public class RobotContainer {
 
     public RobotContainer() {
         DriverStation.silenceJoystickConnectionWarning(true);
+        registerNamedCommands();
         configureDriverBindings();
         configureOperatorBindings();
     }
@@ -89,5 +93,21 @@ public class RobotContainer {
             turret.zero();
             stateMachine.setTurretSetpoint(0.0);
         }));
+    }
+
+    private void registerNamedCommands() {
+        NamedCommands.registerCommand("ToggleIntake", Commands.runOnce(stateMachine::toggleIntake));
+        NamedCommands.registerCommand("TogglePassing", Commands.runOnce(stateMachine::togglePassing));
+        NamedCommands.registerCommand("Shoot", Commands.startEnd(
+            () -> stateMachine.setShoot(true),
+            () -> stateMachine.setShoot(false)));
+
+        NamedCommands.registerCommand("Clear", Commands.startEnd(
+            () -> stateMachine.setClear(true),
+            () -> stateMachine.setClear(false)));
+    }
+
+    public Command getAutonomousCommand() {
+        return new PathPlannerAuto("BlueLeftSweepShoot8Depot");
     }
 }
