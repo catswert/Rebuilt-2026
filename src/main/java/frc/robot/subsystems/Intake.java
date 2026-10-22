@@ -2,6 +2,7 @@ package frc.robot.subsystems;
 
 import com.ctre.phoenix6.controls.MotionMagicVoltage;
 import com.ctre.phoenix6.controls.NeutralOut;
+import com.ctre.phoenix6.controls.TorqueCurrentFOC;
 import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.hardware.CANcoder;
 import com.ctre.phoenix6.hardware.ParentDevice;
@@ -22,6 +23,7 @@ public class Intake extends SubsystemBase {
     private final MotionMagicVoltage pivotRequest = new MotionMagicVoltage(0);
     private final VelocityVoltage rollerRequest = new VelocityVoltage(0);
     private final NeutralOut rollerStopRequest = new NeutralOut();
+    private final TorqueCurrentFOC holdDown = new TorqueCurrentFOC(IntakeConstants.HOLD_AMPS);
 
     @Logged(importance = Logged.Importance.CRITICAL) private double pivotPositionRot = 0.0;
     @Logged(importance = Logged.Importance.CRITICAL) private double pivotSetpointRot = 0.0;
@@ -51,8 +53,14 @@ public class Intake extends SubsystemBase {
     }
 
     public void setDeployed(boolean out) {
-        pivotSetpointRot = out ? IntakeConstants.OUT_POSITION_ROT : IntakeConstants.STOWED_POSITION_ROT;
-        pivotMotor.setControl(pivotRequest.withPosition(pivotSetpointRot));
+        if (out && isOut()){
+            pivotMotor.setControl(holdDown);
+        }
+        else {
+            pivotSetpointRot = out ? IntakeConstants.OUT_POSITION_ROT : IntakeConstants.STOWED_POSITION_ROT;
+            pivotMotor.setControl(pivotRequest.withPosition(pivotSetpointRot));
+    
+        }
     }
 
     public void runRoller() {

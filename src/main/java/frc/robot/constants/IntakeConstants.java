@@ -23,14 +23,16 @@ public final class IntakeConstants {
     /** Wide on purpose: rollers start slightly before fully out and stop as soon as it leaves the zone. */
     public static final double OUT_TOLERANCE_ROT = 15.0 / 360.0;
 
-    public static final double REVERSE_SOFT_LIMIT_ROT = 0.14;
-    public static final double FORWARD_SOFT_LIMIT_ROT = 0.515;
+    public static final double REVERSE_SOFT_LIMIT_ROT = -0.2;
+    public static final double FORWARD_SOFT_LIMIT_ROT = 0.20;
 
     public static final double ROLLER_SPEED_RPS = 40.0;
 
     public static final TalonFXConfiguration PIVOT_CONFIG = new TalonFXConfiguration();
     public static final TalonFXConfiguration ROLLER_CONFIG = new TalonFXConfiguration();
     public static final CANcoderConfiguration PIVOT_ENCODER_CONFIG = new CANcoderConfiguration();
+
+    public static final double HOLD_AMPS = 10;
 
     static {
         PIVOT_CONFIG.MotorOutput.Inverted = InvertedValue.CounterClockwise_Positive;
