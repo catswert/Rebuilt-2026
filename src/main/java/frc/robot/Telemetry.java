@@ -25,11 +25,6 @@ import edu.wpi.first.wpilibj.util.Color8Bit;
  * Telemetry class for drivetrain state visualization.
  * 
  * <p>
- * Motor health telemetry (current, voltage, temperature) for subsystem motors
- * is now handled automatically by {@link frc.robot.logging.TalonFXLogger} via
- * Epilogue.
- * 
- * <p>
  * This class focuses on:
  * <ul>
  * <li>Drivetrain state (pose, speeds, module states) to NetworkTables and

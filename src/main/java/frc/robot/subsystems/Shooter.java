@@ -1,81 +1,62 @@
 package frc.robot.subsystems;
 
-import com.ctre.phoenix6.CANBus;
-import com.ctre.phoenix6.StatusCode;
+import com.ctre.phoenix6.controls.NeutralOut;
 import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.hardware.TalonFX;
 
 import edu.wpi.first.epilogue.Logged;
-import static edu.wpi.first.units.Units.RotationsPerSecond;
-import edu.wpi.first.units.measure.AngularVelocity;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.Constants.TurretConstants;
+import frc.robot.constants.RobotConstants;
+import frc.robot.constants.ShooterConstants;
+import frc.robot.util.PhoenixUtil;
 
 @Logged
 public class Shooter extends SubsystemBase {
-    private final TalonFX shooterMotor;
+    private final TalonFX motor = new TalonFX(ShooterConstants.MOTOR_ID, RobotConstants.MECHANISM_BUS);
+    private final VelocityVoltage velocityRequest = new VelocityVoltage(0);
+    private final NeutralOut coastRequest = new NeutralOut();
 
-    private final VelocityVoltage shooterMotionRequest;
+    @Logged(importance = Logged.Importance.CRITICAL) private double setpointRps = 0.0;
+    @Logged(importance = Logged.Importance.CRITICAL) private double velocityRps = 0.0;
+    @Logged(importance = Logged.Importance.DEBUG) private double supplyCurrentAmps = 0.0;
+    @Logged(importance = Logged.Importance.DEBUG) private double motorVoltage = 0.0;
 
-    private double shooterCurrentSetpoint;
-
-    @Logged(importance = Logged.Importance.CRITICAL) private double shooterSetpointRPS = 0.0;
-    @Logged(importance = Logged.Importance.CRITICAL) private double shooterVelocityRPS = 0.0;
-    @Logged(importance = Logged.Importance.DEBUG) private double shooterCurrentAmps = 0.0;
-    @Logged(importance = Logged.Importance.DEBUG) private double shooterVoltageVolts = 0.0;
-
-    public Shooter(CANBus canBus) {
-        shooterMotor = new TalonFX(TurretConstants.shooterMotorID, canBus);
-
-        configureShooterMotor();
-
-        shooterMotionRequest = new VelocityVoltage(0);
-
-        // Disable all default status signals, then enable only what we need
-        shooterMotor.optimizeBusUtilization();
-        shooterMotor.getVelocity().setUpdateFrequency(50);       // VelocityVoltage feedback + atSetpoint()
-        shooterMotor.getSupplyCurrent().setUpdateFrequency(10);  // telemetry
-        shooterMotor.getMotorVoltage().setUpdateFrequency(10);   // telemetry
+    public Shooter() {
+        PhoenixUtil.applyConfig(motor, ShooterConstants.CONFIG, "shooter");
+        motor.optimizeBusUtilization();
+        motor.getVelocity().setUpdateFrequency(50);
+        motor.getSupplyCurrent().setUpdateFrequency(10);
+        motor.getMotorVoltage().setUpdateFrequency(10);
     }
 
     @Override
     public void periodic() {
-        shooterVelocityRPS = shooterMotor.getVelocity().getValueAsDouble();
-        shooterCurrentAmps = shooterMotor.getSupplyCurrent().getValueAsDouble();
-        shooterVoltageVolts = shooterMotor.getMotorVoltage().getValueAsDouble();
+        velocityRps = motor.getVelocity().getValueAsDouble();
+        supplyCurrentAmps = motor.getSupplyCurrent().getValueAsDouble();
+        motorVoltage = motor.getMotorVoltage().getValueAsDouble();
     }
 
-    private void configureShooterMotor() {
-        StatusCode status = StatusCode.StatusCodeNotInitialized;
-        for (int i = 0; i < 5; ++i) {
-            status = shooterMotor.getConfigurator().apply(TurretConstants.SHOOTER_CONFIG, 0.1);
-            if (status.isOK()) break;
-        }
-        if (!status.isOK()) {
-            System.err.println("Could not apply shooter motor configs: " + status.toString());
-        }
+    public void setVelocity(double rps) {
+        setpointRps = MathUtil.clamp(rps, 0.0, ShooterConstants.MAX_RPS);
+        motor.setControl(velocityRequest.withVelocity(setpointRps));
     }
 
-    public void setShooterSpeed(AngularVelocity speed) {
-        shooterCurrentSetpoint = Math.min(speed.in(RotationsPerSecond), TurretConstants.MAX_SHOOTER_RPS);
-        shooterSetpointRPS = shooterCurrentSetpoint;
-        shooterMotor.setControl(shooterMotionRequest.withVelocity(shooterCurrentSetpoint));
+    public void coast() {
+        setpointRps = 0.0;
+        motor.setControl(coastRequest);
     }
 
-    public boolean atShooterSetpoint() {
-        return Math.abs(shooterMotor.getVelocity().getValueAsDouble()
-                - shooterCurrentSetpoint) < TurretConstants.shooterTolerance;
+    public double getVelocityRps() {
+        return velocityRps;
     }
 
-    // ==================
-    // MOTOR ACCESSORS (for FaultMonitor registration)
-    // ==================
-
-    public TalonFX getShooterMotor() {
-        return shooterMotor;
+    public double getSetpointRps() {
+        return setpointRps;
     }
 
-    public void stop() {
-        shooterMotor.stopMotor();
+    /** A zero setpoint means coasting, which is never ready to shoot. */
+    public boolean atSetpoint() {
+        return setpointRps > 0.0 && Math.abs(velocityRps - setpointRps) < ShooterConstants.TOLERANCE_RPS;
     }
 }

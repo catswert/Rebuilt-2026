@@ -1,37 +1,17 @@
 package frc.robot;
 
-import static edu.wpi.first.units.Units.MetersPerSecond;
-import static edu.wpi.first.units.Units.RadiansPerSecond;
-import static edu.wpi.first.units.Units.Rotations;
-import static edu.wpi.first.units.Units.RotationsPerSecond;
-
-import java.util.Set;
-
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
-import com.pathplanner.lib.auto.AutoBuilder;
-import com.pathplanner.lib.auto.NamedCommands;
 
 import edu.wpi.first.epilogue.Logged;
-import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
-import frc.robot.Constants.CANID;
-import frc.robot.Constants.IndexerConstants;
-import frc.robot.Constants.TurretConstants;
-import frc.robot.Constants.IndexerConstants.IndexerType;
-import frc.robot.commands.AutoShootCommand;
-import frc.robot.commands.CalibrationShootCommand;
-import frc.robot.commands.ShootCommand;
-import frc.robot.commands.TurretAutoAimCommand;
-import frc.robot.commands.indexer.indexerDefault;
-import frc.robot.commands.indexer.reverseIndexers;
-import frc.robot.commands.intake.IntakeInCommand;
-import frc.robot.commands.intake.IntakeOutCommand;
-import frc.robot.Constants.TunerConstants;
+import frc.robot.constants.OperatorConstants;
+import frc.robot.constants.RobotConstants;
+import frc.robot.constants.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Hood;
 import frc.robot.subsystems.Indexer;
@@ -40,227 +20,104 @@ import frc.robot.subsystems.Shooter;
 import frc.robot.subsystems.Turret;
 import frc.robot.subsystems.Vision;
 
-import frc.robot.Constants.Gen;
+import com.pathplanner.lib.auto.NamedCommands;
+import com.pathplanner.lib.commands.PathPlannerAuto;
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import com.pathplanner.lib.auto.AutoBuilder;
+
+
 
 @Logged
 public class RobotContainer {
+    private final CommandXboxController driver = new CommandXboxController(RobotConstants.DRIVER_PORT);
+    private final CommandXboxController operator = new CommandXboxController(RobotConstants.OPERATOR_PORT);
 
-        //  DRIVE
+    public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
+    public final Intake intake = new Intake();
+    public final Indexer indexer = new Indexer();
+    public final Turret turret = new Turret();
+    public final Hood hood = new Hood();
+    public final Shooter shooter = new Shooter();
+    public final Vision vision = new Vision(drivetrain::addVisionMeasurement);
+    private final SendableChooser<Command> autoChooser;
 
-        private final double MaxSpeed = 1.0 * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond);
-        private final double MaxAngularRate = RotationsPerSecond.of(0.75).in(RadiansPerSecond);
-        private final SwerveRequest.FieldCentric drive = new SwerveRequest.FieldCentric()
-                        .withDeadband(MaxSpeed * 0.05).withRotationalDeadband(MaxAngularRate * 0.1)
-                        .withDriveRequestType(DriveRequestType.OpenLoopVoltage);
-        private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
+    public final StateMachine stateMachine = new StateMachine(
+            drivetrain, intake, indexer, turret, hood, shooter, vision,
+            operator::getRightX,
+            () -> -operator.getLeftY());
 
-        //  CONTROLLERS
+    private final SwerveRequest.FieldCentric drive = new SwerveRequest.FieldCentric()
+            .withDeadband(RobotConstants.DRIVE_MAX_SPEED_MPS * RobotConstants.DRIVE_TRANSLATION_DEADBAND_FRACTION)
+            .withRotationalDeadband(RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC * RobotConstants.DRIVE_ROTATION_DEADBAND_FRACTION)
+            .withDriveRequestType(DriveRequestType.OpenLoopVoltage);
+    private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
+    private final SwerveRequest.Idle idle = new SwerveRequest.Idle();
 
-        private final CommandXboxController joystick = new CommandXboxController(Gen.driverPort);
-        public static CommandXboxController operator = new CommandXboxController(Gen.operatorPort);
-        
-        //  SUBSYSTEMS
+    private final Telemetry telemetry = new Telemetry(RobotConstants.DRIVE_MAX_SPEED_MPS);
 
-        public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
-        public final Vision vision = (Gen.enableVision) ? new Vision() : null;
-        public final Intake intake = (Gen.enableIntake) ? new Intake(Gen.mechanismBus) : null;
-        public final Indexer indexer = (Gen.enableIndexer) ? new Indexer(Gen.mechanismBus) : null;
-        public final Turret turret = (Gen.enableTurret) ? new Turret(Gen.mechanismBus) : null;
-        public final Hood hood = (Gen.enableHood) ? new Hood(Gen.mechanismBus) : null;
-        public final Shooter shooter = (Gen.enableShooter) ? new Shooter(Gen.mechanismBus) : null;
+    public RobotContainer() {
+        DriverStation.silenceJoystickConnectionWarning(true);
+        registerNamedCommands();
+        configureDriverBindings();
+        configureOperatorBindings();
+        autoChooser = AutoBuilder.buildAutoChooser();
+        SmartDashboard.putData("Auto Chooser", autoChooser);
+    }
 
-        public static TurretAutoAimCommand visionAutoAim;
+    public Command getAutonomousCommand() {
+        return autoChooser.getSelected();
+    }
 
-        private final Telemetry logger = new Telemetry(MaxSpeed);
-        private final SendableChooser<Command> autoChooser;
+    private void configureDriverBindings() {
+        drivetrain.setDefaultCommand(drivetrain.applyRequest(() -> drive
+                .withVelocityX(-driver.getLeftY() * RobotConstants.DRIVE_MAX_SPEED_MPS)
+                .withVelocityY(-driver.getLeftX() * RobotConstants.DRIVE_MAX_SPEED_MPS)
+                .withRotationalRate(-driver.getRightX() * RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC)));
 
-        public RobotContainer() {
-                edu.wpi.first.wpilibj.DriverStation.silenceJoystickConnectionWarning(true);
+        RobotModeTriggers.disabled().whileTrue(drivetrain.applyRequest(() -> idle).ignoringDisable(true));
 
-                if (turret != null){
+        driver.a().whileTrue(drivetrain.applyRequest(() -> brake));
+        driver.leftBumper().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
 
-                        visionAutoAim = new TurretAutoAimCommand(drivetrain, vision, turret,
-                                () -> operator.getRightX(),
-                                () -> operator.leftStick().getAsBoolean(),
-                                () -> operator.leftBumper().getAsBoolean());
-                        }
-                else{
-                        visionAutoAim = null;
-                }
+        drivetrain.registerTelemetry(telemetry::telemeterize);
+    }
 
-                if (hood != null){
-                        hood.setDefaultCommand(hood.run(() ->
-                        hood.setHoodAngle(Rotations.of(hood.getHoodPosition()))));
-                }
+    private void configureOperatorBindings() {
+        //operator.x.onTrue for allat runOnce and shi for toggleManualTurret
+        operator.x().toggleOnTrue(Commands.runOnce(stateMachine::toggleManualTurret));
+        operator.a().onTrue(Commands.runOnce(stateMachine::toggleIntake));
+        operator.y().onTrue(Commands.runOnce(stateMachine::togglePassing));
 
-                if (intake != null && indexer != null){
-                        indexer.setDefaultCommand(new indexerDefault(indexer, () -> intake.isOut()));
-                }
+        operator.rightTrigger().whileTrue(Commands.startEnd(
+                () -> stateMachine.setShoot(true),
+                () -> stateMachine.setShoot(false)));
 
-                configureDriveBindings();
-                configureSharedBindings();
-                if (turret!=null && vision!=null){
-                        turret.setDefaultCommand(visionAutoAim);
-                }
+        operator.rightStick().whileTrue(Commands.startEnd(
+                () -> stateMachine.setClear(true),
+                () -> stateMachine.setClear(false)));
 
+        operator.povUp().onTrue(Commands.runOnce(() -> stateMachine.setHoodSetpoint(OperatorConstants.HOOD_PRESET_UP_ROT)));
+        operator.povRight().onTrue(Commands.runOnce(() -> stateMachine.setHoodSetpoint(OperatorConstants.HOOD_PRESET_RIGHT_ROT)));
+        operator.povLeft().onTrue(Commands.runOnce(() -> stateMachine.setHoodSetpoint(OperatorConstants.HOOD_PRESET_LEFT_ROT)));
+        operator.povDown().onTrue(Commands.runOnce(() -> stateMachine.setHoodSetpoint(OperatorConstants.HOOD_PRESET_DOWN_ROT)));
 
-                drivetrain.configurePathPlanner();
-                registerNamedCommands();
-                autoChooser = AutoBuilder.buildAutoChooser();
-                SmartDashboard.putData("Auto Chooser", autoChooser);
-                }
+        operator.back().onTrue(Commands.runOnce(() -> {
+            turret.zero();
+            stateMachine.setTurretSetpoint(0.0);
+        }));
+    }
 
-        
+    private void registerNamedCommands() {
+        NamedCommands.registerCommand("ToggleIntake", Commands.runOnce(stateMachine::toggleIntake));
+        NamedCommands.registerCommand("TogglePassing", Commands.runOnce(stateMachine::togglePassing));
+        NamedCommands.registerCommand("Shoot", Commands.startEnd(
+            () -> stateMachine.setShoot(true),
+            () -> stateMachine.setShoot(false)));
 
-        //  DRIVE BINDINGS (always active)
+        NamedCommands.registerCommand("Clear", Commands.startEnd(
+            () -> stateMachine.setClear(true),
+            () -> stateMachine.setClear(false)));
+    }
 
-        private void configureDriveBindings() {
-                drivetrain.setDefaultCommand(drivetrain.applyRequest(() -> drive
-                        .withVelocityX(-joystick.getLeftY() * MaxSpeed)
-                        .withVelocityY(-joystick.getLeftX() * MaxSpeed)
-                        .withRotationalRate(-joystick.getRightX() * MaxAngularRate)));
-
-                final var idle = new SwerveRequest.Idle();
-                RobotModeTriggers.disabled().whileTrue(
-                        drivetrain.applyRequest(() -> idle).ignoringDisable(true));
-
-                joystick.a().whileTrue(drivetrain.applyRequest(() -> brake));
-                joystick.leftBumper().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
-
-                drivetrain.registerTelemetry(logger::telemeterize);
-
-        }
-
-        
-
-        //  OPERATOR BINDINGS}
-        
-        private void configureSharedBindings() {
-
-                if (intake != null) {
-                        operator.a().toggleOnTrue(new IntakeOutCommand(intake));
-                        //operator.a().toggleOnTrue(new runRoller(intake));
-
-                }
-
-                if (indexer != null && hood != null && shooter != null && vision != null && turret != null) {
-
-                operator.rightTrigger().whileTrue(Commands.defer(() -> {
-                        
-                        return new ShootCommand(indexer, hood, shooter,
-                                visionAutoAim::getDistanceToHub,
-                                visionAutoAim.getCalculator(),
-                                visionAutoAim::isAimed,
-                                visionAutoAim::currentlyPassing,
-                                drivetrain, turret);
-                }, Set.of(indexer, hood, shooter)));
-
-                
-        }
-
-        if ( indexer != null) {
-
-                operator.leftTrigger().whileTrue(
-                        Commands.startEnd(
-                                () -> indexer.setIndexerSpeed(IndexerConstants.VERTICAL_INDEXER_SPEED, IndexerType.VERTICAL),
-                                () -> indexer.stopIndexer(IndexerType.VERTICAL),
-                                indexer));
-        }
-                if (turret != null) {
-
-                operator.rightBumper().onTrue(Commands.runOnce(() -> {
-                        turret.getTurretMotor().setPosition(0);
-                        System.out.println("[TURRET] Zeroed at current position");
-                }));
-        }
-
-                // CalibrationShootCommand — uncomment for interp table calibration sessions only
-                // if (turret != null && hood != null && shooter != null && indexer != null && vision != null){
-                // joystick.b().whileTrue(new CalibrationShootCommand(turret, hood, shooter, indexer, vision));
-                // }
-                
-                // Turret setpoints (D-pad) — interrupts auto-aim default while held
-
-                if (turret != null){
-                        operator.povUp().whileTrue(turret.run(
-                                () -> turret.moveTurret(Rotations.of(TurretConstants.TURRET_POS_FORWARD))));
-                        operator.povDown().whileTrue(turret.run(
-                                () -> turret.moveTurret(Rotations.of(TurretConstants.TURRET_POS_BACK))));
-                        operator.povLeft().whileTrue(turret.run(
-                                () -> turret.moveTurret(Rotations.of(TurretConstants.TURRET_POS_LEFT))));
-                        operator.povRight().whileTrue(turret.run(
-                                () -> turret.moveTurret(Rotations.of(TurretConstants.TURRET_POS_RIGHT))));
-                }
-
-                if (indexer != null && hood != null && shooter != null) {
-                       operator.rightStick().whileTrue(new reverseIndexers(indexer , shooter));
-                }    
-                if (hood != null) 
-
-                        operator.x().whileTrue(hood.run(
-                                () -> hood.setHoodAngle(Rotations.of(TurretConstants.HOOD_POS_DOWN))));
-                        operator.y().whileTrue(hood.run(
-                                () -> hood.setHoodAngle(Rotations.of(TurretConstants.HOOD_POS_MID))));
-                        operator.b().whileTrue(hood.run(
-                                () -> hood.setHoodAngle(Rotations.of(TurretConstants.HOOD_POS_UP))));
-
-                }
-        
-
-        //  NAMED COMMANDS (for PathPlanner event markers)
-        private void registerNamedCommands() {
-                if (intake != null) {
-                        NamedCommands.registerCommand("intakeOut", new IntakeOutCommand(intake));
-                        NamedCommands.registerCommand("intakeIn", new IntakeInCommand(intake));
-                }
-
-                if (indexer != null && hood != null && shooter != null && vision != null && turret != null){
-
-                NamedCommands.registerCommand("shoot",
-                        new ShootCommand(indexer, hood, shooter,
-                                visionAutoAim::getDistanceToHub,
-                                visionAutoAim.getCalculator(),
-                                visionAutoAim::isAimed,
-                                () -> false,
-                                drivetrain, turret));
-                }
-
-                if (shooter!= null && indexer != null){
-
-                NamedCommands.registerCommand("stopAll",
-                        Commands.sequence(
-                                Commands.runOnce(() -> shooter.stop(), shooter),
-                                Commands.runOnce(() -> indexer.stop(), indexer)));
-
-                }
-                if (shooter != null && hood != null && vision != null && shooter != null && turret != null){
-
-                NamedCommands.registerCommand("autoShoot",
-                                new AutoShootCommand(shooter, hood,
-                                        visionAutoAim::getDistanceToHub,
-                                        visionAutoAim.getCalculator()));
-                }
-
-                if (indexer != null){
-
-                NamedCommands.registerCommand("feedIndexers",
-                        Commands.runEnd(
-                                () -> {
-                                        indexer.setIndexerSpeed(IndexerConstants.HORIZONTAL_INDEXER_SPEED, IndexerType.HORIZONTAL);
-                                        indexer.setIndexerSpeed(IndexerConstants.VERTICAL_INDEXER_SPEED, IndexerType.VERTICAL);
-                                        indexer.setIndexerSpeed(IndexerConstants.UPWARD_INDEXER_SPEED, IndexerType.UPWARD);
-                                },
-                                () -> indexer.stop(),
-                                indexer));
-                NamedCommands.registerCommand("reverseIndexer", 
-                        new reverseIndexers(indexer, shooter));
-                        }
-
-        }
-
-        //  AUTONOMOUS
-        public Command getAutonomousCommand() {
-                return autoChooser.getSelected();
-                // return null;
-        }
 }
