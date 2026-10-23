@@ -55,19 +55,27 @@ class PointToHeadingTest {
     void centeredStickHoldsTheHeadingItReleasedAt() {
         PointToHeading pointToHeading = new PointToHeading();
         Rotation2d released = Rotation2d.fromDegrees(30.0);
-        assertEquals(0.0, pointToHeading.rotationalRate(0.0, 0.0, released), 1e-9);
+        assertEquals(0.0, pointToHeading.rotationalRate(0.0, 0.0, released, 1.0), 1e-9);
         // Bumped clockwise, so it turns counterclockwise back toward 30 degrees.
-        assertTrue(pointToHeading.rotationalRate(0.0, 0.0, Rotation2d.fromDegrees(20.0)) > 0.0);
+        assertTrue(pointToHeading.rotationalRate(0.0, 0.0, Rotation2d.fromDegrees(20.0), 1.0) > 0.0);
     }
 
     @Test
     void movingTheStickReleasesTheHold() {
         PointToHeading pointToHeading = new PointToHeading();
-        pointToHeading.rotationalRate(0.0, 0.0, Rotation2d.kZero);
+        pointToHeading.rotationalRate(0.0, 0.0, Rotation2d.kZero, 1.0);
         // Stick hard right points the intake right, a clockwise turn.
-        assertTrue(pointToHeading.rotationalRate(1.0, 0.0, Rotation2d.kZero) < 0.0);
+        assertTrue(pointToHeading.rotationalRate(1.0, 0.0, Rotation2d.kZero, 1.0) < 0.0);
         // Back to center locks the new heading, not the old one.
         Rotation2d now = Rotation2d.fromDegrees(-45.0);
-        assertEquals(0.0, pointToHeading.rotationalRate(0.0, 0.0, now), 1e-9);
+        assertEquals(0.0, pointToHeading.rotationalRate(0.0, 0.0, now, 1.0), 1e-9);
+    }
+
+    @Test
+    void precisionScaleShrinksTheTurnCap() {
+        PointToHeading pointToHeading = new PointToHeading();
+        double scale = RobotConstants.PRECISION_SPEED_SCALE;
+        // Full stick toward a target a quarter turn away saturates the cap.
+        assertEquals(-scale * MAX_RATE, pointToHeading.rotationalRate(1.0, 0.0, Rotation2d.kZero, scale), 1e-9);
     }
 }

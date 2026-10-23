@@ -29,6 +29,12 @@ public final class RobotConstants {
     public static final double DRIVE_TRANSLATION_DEADBAND_FRACTION = 0.05;
     public static final double DRIVE_ROTATION_DEADBAND_FRACTION = 0.1;
 
+    /** Holding the driver's right trigger scales drive and turn speed down to this fraction. */
+    public static final double PRECISION_SPEED_SCALE = 0.3;
+    /** Time to ramp between full and precision speed, so pressing or releasing the trigger never jumps. */
+    public static final double PRECISION_TRANSITION_SECONDS = 0.4;
+    public static final double PRECISION_TRIGGER_THRESHOLD = 0.5;
+
     /** Point-to-heading test mode: turn rate in rad/s per radian of heading error, before the stick's speed cap. */
     public static final double POINT_HEADING_KP = 6.0;
     /** Heading errors this close to half a turn count as exactly behind and turn counterclockwise. */

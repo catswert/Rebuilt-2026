@@ -4,6 +4,7 @@ import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 
 import edu.wpi.first.epilogue.Logged;
+import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -59,6 +60,11 @@ public class RobotContainer {
             .withDriveRequestType(DriveRequestType.OpenLoopVoltage);
     private final PointToHeading pointToHeading = new PointToHeading();
     @Logged(importance = Logged.Importance.CRITICAL) private boolean pointToHeadingEnabled = false;
+    private static final double PRECISION_RAMP_PER_SEC =
+            (1.0 - RobotConstants.PRECISION_SPEED_SCALE) / RobotConstants.PRECISION_TRANSITION_SECONDS;
+    private final SlewRateLimiter speedScaleLimiter =
+            new SlewRateLimiter(PRECISION_RAMP_PER_SEC, -PRECISION_RAMP_PER_SEC, 1.0);
+    @Logged(importance = Logged.Importance.CRITICAL) private double speedScale = 1.0;
     private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
     private final SwerveRequest.Idle idle = new SwerveRequest.Idle();
 
@@ -79,16 +85,19 @@ public class RobotContainer {
 
     private void configureDriverBindings() {
         drivetrain.setDefaultCommand(drivetrain.applyRequest(() -> {
-            double velocityX = -driver.getLeftY() * RobotConstants.DRIVE_MAX_SPEED_MPS;
-            double velocityY = -driver.getLeftX() * RobotConstants.DRIVE_MAX_SPEED_MPS;
+            boolean precision = driver.getRightTriggerAxis() > RobotConstants.PRECISION_TRIGGER_THRESHOLD;
+            speedScale = speedScaleLimiter.calculate(precision ? RobotConstants.PRECISION_SPEED_SCALE : 1.0);
+            double velocityX = -driver.getLeftY() * RobotConstants.DRIVE_MAX_SPEED_MPS * speedScale;
+            double velocityY = -driver.getLeftX() * RobotConstants.DRIVE_MAX_SPEED_MPS * speedScale;
             if (!pointToHeadingEnabled) {
                 return drive.withVelocityX(velocityX).withVelocityY(velocityY)
-                        .withRotationalRate(-driver.getRightX() * RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC);
+                        .withRotationalRate(-driver.getRightX() * RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC * speedScale);
             }
             Rotation2d operatorHeading = drivetrain.getState().Pose.getRotation()
                     .minus(drivetrain.getOperatorForwardDirection());
             return pointDrive.withVelocityX(velocityX).withVelocityY(velocityY)
-                    .withRotationalRate(pointToHeading.rotationalRate(driver.getRightX(), driver.getRightY(), operatorHeading));
+                    .withRotationalRate(pointToHeading.rotationalRate(
+                            driver.getRightX(), driver.getRightY(), operatorHeading, speedScale));
         }));
 
         RobotModeTriggers.disabled().whileTrue(drivetrain.applyRequest(() -> idle).ignoringDisable(true));
