@@ -91,13 +91,12 @@ public class RobotContainer {
             double velocityY = -driver.getLeftX() * RobotConstants.DRIVE_MAX_SPEED_MPS * speedScale;
             if (!pointToHeadingEnabled) {
                 return drive.withVelocityX(velocityX).withVelocityY(velocityY)
-                        .withRotationalRate(-driver.getRightX() * RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC * speedScale);
+                        .withRotationalRate(-driver.getRightX() * RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC);
             }
             Rotation2d operatorHeading = drivetrain.getState().Pose.getRotation()
                     .minus(drivetrain.getOperatorForwardDirection());
             return pointDrive.withVelocityX(velocityX).withVelocityY(velocityY)
-                    .withRotationalRate(pointToHeading.rotationalRate(
-                            driver.getRightX(), driver.getRightY(), operatorHeading, speedScale));
+                    .withRotationalRate(pointToHeading.rotationalRate(driver.getRightX(), driver.getRightY(), operatorHeading));
         }));
 
         RobotModeTriggers.disabled().whileTrue(drivetrain.applyRequest(() -> idle).ignoringDisable(true));

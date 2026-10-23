@@ -18,20 +18,17 @@ public final class PointToHeading {
         heldHeading = null;
     }
 
-    /**
-     * Rotational rate in rad/s from the raw stick axes (right is +x, down is +y, as the controller reports).
-     * speedScale shrinks the turn-rate cap, as precision mode does, without softening the hold.
-     */
-    public double rotationalRate(double stickX, double stickY, Rotation2d currentHeading, double speedScale) {
+    /** Rotational rate in rad/s from the raw stick axes (right is +x, down is +y, as the controller reports). */
+    public double rotationalRate(double stickX, double stickY, Rotation2d currentHeading) {
         double magnitude = stickMagnitude(stickX, stickY);
         if (magnitude == 0.0) {
             if (heldHeading == null) {
                 heldHeading = currentHeading;
             }
-            return rate(errorRad(currentHeading, heldHeading), speedScale);
+            return rate(errorRad(currentHeading, heldHeading), 1.0);
         }
         heldHeading = null;
-        return rate(errorRad(currentHeading, stickHeading(stickX, stickY)), magnitude * speedScale);
+        return rate(errorRad(currentHeading, stickHeading(stickX, stickY)), magnitude);
     }
 
     /** Stick up faces away from the driver and stick left faces left, counterclockwise positive. */
