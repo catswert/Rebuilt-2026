@@ -91,8 +91,9 @@ public class RobotContainer {
             double velocityY = -driver.getLeftX() * RobotConstants.DRIVE_MAX_SPEED_MPS * speedScale;
             if (!pointToHeadingEnabled) {
                 return drive.withVelocityX(velocityX).withVelocityY(velocityY)
-                        .withRotationalRate(-driver.getRightX() * RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC);
+                        .withRotationalRate(-driver.getRightX() * RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC * speedScale);
             }
+            // Point-to-heading keeps its full turn rate in precision mode; only driving slows.
             Rotation2d operatorHeading = drivetrain.getState().Pose.getRotation()
                     .minus(drivetrain.getOperatorForwardDirection());
             return pointDrive.withVelocityX(velocityX).withVelocityY(velocityY)

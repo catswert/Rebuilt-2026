@@ -29,7 +29,7 @@ public final class RobotConstants {
     public static final double DRIVE_TRANSLATION_DEADBAND_FRACTION = 0.05;
     public static final double DRIVE_ROTATION_DEADBAND_FRACTION = 0.1;
 
-    /** Holding the driver's right trigger scales drive speed (not turning) down to this fraction. */
+    /** Holding the driver's right trigger scales drive speed and normal turning (not point-to-heading) down to this fraction. */
     public static final double PRECISION_SPEED_SCALE = 0.3;
     /** Time to ramp between full and precision speed, so pressing or releasing the trigger never jumps. */
     public static final double PRECISION_TRANSITION_SECONDS = 0.4;
