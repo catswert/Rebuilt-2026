@@ -4,6 +4,7 @@ import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 
 import edu.wpi.first.epilogue.Logged;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
@@ -19,6 +20,7 @@ import frc.robot.subsystems.Intake;
 import frc.robot.subsystems.Shooter;
 import frc.robot.subsystems.Turret;
 import frc.robot.subsystems.Vision;
+import frc.robot.util.PointToHeading;
 
 import com.pathplanner.lib.auto.NamedCommands;
 import com.pathplanner.lib.commands.PathPlannerAuto;
@@ -51,6 +53,12 @@ public class RobotContainer {
             .withDeadband(RobotConstants.DRIVE_MAX_SPEED_MPS * RobotConstants.DRIVE_TRANSLATION_DEADBAND_FRACTION)
             .withRotationalDeadband(RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC * RobotConstants.DRIVE_ROTATION_DEADBAND_FRACTION)
             .withDriveRequestType(DriveRequestType.OpenLoopVoltage);
+    /** No rotational deadband: the heading controller's small holding corrections must reach the modules. */
+    private final SwerveRequest.FieldCentric pointDrive = new SwerveRequest.FieldCentric()
+            .withDeadband(RobotConstants.DRIVE_MAX_SPEED_MPS * RobotConstants.DRIVE_TRANSLATION_DEADBAND_FRACTION)
+            .withDriveRequestType(DriveRequestType.OpenLoopVoltage);
+    private final PointToHeading pointToHeading = new PointToHeading();
+    @Logged(importance = Logged.Importance.CRITICAL) private boolean pointToHeadingEnabled = false;
     private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
     private final SwerveRequest.Idle idle = new SwerveRequest.Idle();
 
@@ -70,15 +78,33 @@ public class RobotContainer {
     }
 
     private void configureDriverBindings() {
-        drivetrain.setDefaultCommand(drivetrain.applyRequest(() -> drive
-                .withVelocityX(-driver.getLeftY() * RobotConstants.DRIVE_MAX_SPEED_MPS)
-                .withVelocityY(-driver.getLeftX() * RobotConstants.DRIVE_MAX_SPEED_MPS)
-                .withRotationalRate(-driver.getRightX() * RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC)));
+        drivetrain.setDefaultCommand(drivetrain.applyRequest(() -> {
+            double velocityX = -driver.getLeftY() * RobotConstants.DRIVE_MAX_SPEED_MPS;
+            double velocityY = -driver.getLeftX() * RobotConstants.DRIVE_MAX_SPEED_MPS;
+            if (!pointToHeadingEnabled) {
+                return drive.withVelocityX(velocityX).withVelocityY(velocityY)
+                        .withRotationalRate(-driver.getRightX() * RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC);
+            }
+            Rotation2d operatorHeading = drivetrain.getState().Pose.getRotation()
+                    .minus(drivetrain.getOperatorForwardDirection());
+            return pointDrive.withVelocityX(velocityX).withVelocityY(velocityY)
+                    .withRotationalRate(pointToHeading.rotationalRate(driver.getRightX(), driver.getRightY(), operatorHeading));
+        }));
 
         RobotModeTriggers.disabled().whileTrue(drivetrain.applyRequest(() -> idle).ignoringDisable(true));
+        // A heading held from before a disable or a reseed would snap the robot back to it.
+        RobotModeTriggers.disabled().onTrue(Commands.runOnce(pointToHeading::reset).ignoringDisable(true));
 
         driver.a().whileTrue(drivetrain.applyRequest(() -> brake));
-        driver.leftBumper().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
+        driver.leftBumper().onTrue(drivetrain.runOnce(() -> {
+            drivetrain.seedFieldCentric();
+            pointToHeading.reset();
+        }));
+        // Test feature: right stick points the intake instead of setting a turn rate.
+        driver.povUp().onTrue(Commands.runOnce(() -> {
+            pointToHeadingEnabled = !pointToHeadingEnabled;
+            pointToHeading.reset();
+        }));
 
         drivetrain.registerTelemetry(telemetry::telemeterize);
     }

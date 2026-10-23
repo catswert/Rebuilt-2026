@@ -29,6 +29,11 @@ public final class RobotConstants {
     public static final double DRIVE_TRANSLATION_DEADBAND_FRACTION = 0.05;
     public static final double DRIVE_ROTATION_DEADBAND_FRACTION = 0.1;
 
+    /** Point-to-heading test mode: turn rate in rad/s per radian of heading error, before the stick's speed cap. */
+    public static final double POINT_HEADING_KP = 6.0;
+    /** Heading errors this close to half a turn count as exactly behind and turn counterclockwise. */
+    public static final double POINT_HEADING_TIE_TOLERANCE_RAD = 1e-6;
+
     /** From the old PathPlanner robot size. Ignores the extra reach of a rotated robot's corners. */
     public static final double BUMPER_HALF_LENGTH_METERS = 0.838 / 2.0;
     /** Once passing, the robot must come back inside the zone by this much before it turns off, so it does not flicker at the line. */
