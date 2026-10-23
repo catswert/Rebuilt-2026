@@ -22,8 +22,7 @@ public final class ShooterConstants {
         CONFIG.CurrentLimits.StatorCurrentLimitEnable = true;
         CONFIG.CurrentLimits.StatorCurrentLimit = 160.0;
         CONFIG.CurrentLimits.SupplyCurrentLimitEnable = true;
-        // Spin-up shares the battery with four drive motors, so keep it from pulling the bus into brownout.
-        CONFIG.CurrentLimits.SupplyCurrentLimit = 60.0;
+        CONFIG.CurrentLimits.SupplyCurrentLimit = 120.0;
         CONFIG.Slot0.kS = 0.15;
         CONFIG.Slot0.kV = 0.12;
         CONFIG.Slot0.kP = 0.3;
