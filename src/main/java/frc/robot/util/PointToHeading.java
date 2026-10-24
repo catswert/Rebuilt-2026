@@ -6,14 +6,14 @@ import frc.robot.constants.RobotConstants;
 
 /**
  * Test driving mode: the rotation stick points the intake in a field direction, and how far the
- * stick is pushed caps how fast the robot turns there. Inside the deadband the robot holds the
- * heading it had when the stick came back to center. Headings are operator relative, so stick
- * up is straight away from the driver.
+ * stick is pushed caps how fast the robot turns there. Inside the deadband the robot keeps turning
+ * to the last direction the stick aimed and holds it, so a quick flick still points the robot there.
+ * Headings are operator relative, so stick up is straight away from the driver.
  */
 public final class PointToHeading {
     private Rotation2d heldHeading = null;
 
-    /** Forget the held heading so the next centered stick locks wherever the robot is then. */
+    /** Forget the aimed heading so a centered stick locks wherever the robot is then. */
     public void reset() {
         heldHeading = null;
     }
@@ -27,8 +27,8 @@ public final class PointToHeading {
             }
             return rate(errorRad(currentHeading, heldHeading), 1.0);
         }
-        heldHeading = null;
-        return rate(errorRad(currentHeading, stickHeading(stickX, stickY)), magnitude);
+        heldHeading = stickHeading(stickX, stickY);
+        return rate(errorRad(currentHeading, heldHeading), magnitude);
     }
 
     /** Stick up faces away from the driver and stick left faces left, counterclockwise positive. */

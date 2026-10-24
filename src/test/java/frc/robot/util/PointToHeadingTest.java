@@ -66,8 +66,26 @@ class PointToHeadingTest {
         pointToHeading.rotationalRate(0.0, 0.0, Rotation2d.kZero);
         // Stick hard right points the intake right, a clockwise turn.
         assertTrue(pointToHeading.rotationalRate(1.0, 0.0, Rotation2d.kZero) < 0.0);
-        // Back to center locks the new heading, not the old one.
-        Rotation2d now = Rotation2d.fromDegrees(-45.0);
-        assertEquals(0.0, pointToHeading.rotationalRate(0.0, 0.0, now), 1e-9);
+        // Once there, back to center holds the new heading, not the old one.
+        assertEquals(0.0, pointToHeading.rotationalRate(0.0, 0.0, Rotation2d.kCW_Pi_2), 1e-9);
+    }
+
+    @Test
+    void quickFlickStillTurnsAllTheWay() {
+        PointToHeading pointToHeading = new PointToHeading();
+        // A flick right, released before the robot has turned much.
+        pointToHeading.rotationalRate(1.0, 0.0, Rotation2d.kZero);
+        Rotation2d partWay = Rotation2d.fromDegrees(-20.0);
+        // Centered, it keeps turning clockwise toward -90 at the full rate cap.
+        assertEquals(-MAX_RATE, pointToHeading.rotationalRate(0.0, 0.0, partWay), 1e-9);
+        assertEquals(0.0, pointToHeading.rotationalRate(0.0, 0.0, Rotation2d.kCW_Pi_2), 1e-9);
+    }
+
+    @Test
+    void resetLocksWhereverTheRobotIs() {
+        PointToHeading pointToHeading = new PointToHeading();
+        pointToHeading.rotationalRate(1.0, 0.0, Rotation2d.kZero);
+        pointToHeading.reset();
+        assertEquals(0.0, pointToHeading.rotationalRate(0.0, 0.0, Rotation2d.fromDegrees(-20.0)), 1e-9);
     }
 }
