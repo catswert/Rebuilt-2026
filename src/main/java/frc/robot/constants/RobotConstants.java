@@ -40,6 +40,17 @@ public final class RobotConstants {
     /** Heading errors this close to half a turn count as exactly behind and turn counterclockwise. */
     public static final double POINT_HEADING_TIE_TOLERANCE_RAD = 1e-6;
 
+    /** A D-pad direction must be held this long before it snaps, so a finger rolling across the pad does not. */
+    public static final double SNAP_HOLD_SECONDS = 0.1;
+    /** D-pad snap cruise turn rate: a moderate 60% of the max turn rate (0.45 rot/s). */
+    public static final double SNAP_MAX_RATE_RAD_PER_SEC = 0.6 * DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC;
+    /** How fast the snap's turn command may change, so it never jerks. */
+    public static final double SNAP_ACCEL_RAD_PER_SEC_SQ = 9.0;
+    /** Braking into the snap heading; the turn rate follows sqrt(2 * decel * error) so it stops without overshoot. */
+    public static final double SNAP_DECEL_RAD_PER_SEC_SQ = 4.5;
+    /** Snap final approach: turn rate in rad/s per radian of heading error. */
+    public static final double SNAP_KP = 4.0;
+
     /** From the old PathPlanner robot size. Ignores the extra reach of a rotated robot's corners. */
     public static final double BUMPER_HALF_LENGTH_METERS = 0.838 / 2.0;
     /** Once passing, the robot must come back inside the zone by this much before it turns off, so it does not flicker at the line. */

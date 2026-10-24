@@ -21,6 +21,7 @@ import frc.robot.subsystems.Intake;
 import frc.robot.subsystems.Shooter;
 import frc.robot.subsystems.Turret;
 import frc.robot.subsystems.Vision;
+import frc.robot.util.HeadingSnap;
 import frc.robot.util.PointToHeading;
 
 import com.pathplanner.lib.auto.NamedCommands;
@@ -60,6 +61,7 @@ public class RobotContainer {
             .withDriveRequestType(DriveRequestType.OpenLoopVoltage);
     private final PointToHeading pointToHeading = new PointToHeading();
     @Logged(importance = Logged.Importance.CRITICAL) private boolean pointToHeadingEnabled = false;
+    private final HeadingSnap headingSnap = new HeadingSnap();
     private static final double PRECISION_RAMP_PER_SEC =
             (1.0 - RobotConstants.PRECISION_SPEED_SCALE) / RobotConstants.PRECISION_TRANSITION_SECONDS;
     private final SlewRateLimiter speedScaleLimiter =
@@ -89,28 +91,47 @@ public class RobotContainer {
             speedScale = speedScaleLimiter.calculate(precision ? RobotConstants.PRECISION_SPEED_SCALE : 1.0);
             double velocityX = -driver.getLeftY() * RobotConstants.DRIVE_MAX_SPEED_MPS * speedScale;
             double velocityY = -driver.getLeftX() * RobotConstants.DRIVE_MAX_SPEED_MPS * speedScale;
-            if (!pointToHeadingEnabled) {
-                return drive.withVelocityX(velocityX).withVelocityY(velocityY)
-                        .withRotationalRate(-driver.getRightX() * RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC * speedScale);
+            Rotation2d snapHeading = headingSnap.updateDpad(driver.getHID().getPOV(), RobotConstants.LOOP_PERIOD_SECONDS);
+            if (snapHeading != null) {
+                headingSnap.request(snapHeading, drivetrain.getState().Speeds.omegaRadiansPerSecond);
             }
-            // Point-to-heading keeps its full turn rate in precision mode; only driving slows.
+            // Moving the rotation stick always takes over from a snap.
+            if (Math.abs(driver.getRightX()) >= RobotConstants.DRIVE_ROTATION_DEADBAND_FRACTION) {
+                headingSnap.cancel();
+            }
             Rotation2d operatorHeading = drivetrain.getState().Pose.getRotation()
                     .minus(drivetrain.getOperatorForwardDirection());
-            return pointDrive.withVelocityX(velocityX).withVelocityY(velocityY)
-                    .withRotationalRate(pointToHeading.rotationalRate(driver.getRightX(), driver.getRightY(), operatorHeading));
+            if (pointToHeadingEnabled) {
+                // Point-to-heading keeps its full turn rate in precision mode; only driving slows.
+                return pointDrive.withVelocityX(velocityX).withVelocityY(velocityY)
+                        .withRotationalRate(pointToHeading.rotationalRate(driver.getRightX(), driver.getRightY(), operatorHeading));
+            }
+            if (headingSnap.isActive()) {
+                // Snap holds its heading until the stick moves, a new direction is pressed, or the field is reseeded.
+                return pointDrive.withVelocityX(velocityX).withVelocityY(velocityY)
+                        .withRotationalRate(headingSnap.rotationalRate(operatorHeading));
+            }
+            return drive.withVelocityX(velocityX).withVelocityY(velocityY)
+                    .withRotationalRate(-driver.getRightX() * RobotConstants.DRIVE_MAX_ANGULAR_RATE_RAD_PER_SEC * speedScale);
         }));
 
         RobotModeTriggers.disabled().whileTrue(drivetrain.applyRequest(() -> idle).ignoringDisable(true));
         // A heading held from before a disable or a reseed would snap the robot back to it.
-        RobotModeTriggers.disabled().onTrue(Commands.runOnce(pointToHeading::reset).ignoringDisable(true));
+        RobotModeTriggers.disabled().onTrue(Commands.runOnce(() -> {
+            pointToHeading.reset();
+            headingSnap.cancel();
+        }).ignoringDisable(true));
 
-        driver.a().whileTrue(drivetrain.applyRequest(() -> brake));
-        driver.leftBumper().onTrue(drivetrain.runOnce(() -> {
+        // Both back paddles (mapped to X and B in Flydigi Space Station) X-lock the wheels.
+        driver.x().and(driver.b()).whileTrue(drivetrain.applyRequest(() -> brake));
+        // LM + RM (mapped to LB and RB) reseed the field-relative heading.
+        driver.leftBumper().and(driver.rightBumper()).onTrue(drivetrain.runOnce(() -> {
             drivetrain.seedFieldCentric();
             pointToHeading.reset();
+            headingSnap.cancel();
         }));
         // Test feature: right stick points the intake instead of setting a turn rate.
-        driver.povUp().onTrue(Commands.runOnce(() -> {
+        driver.rightStick().onTrue(Commands.runOnce(() -> {
             pointToHeadingEnabled = !pointToHeadingEnabled;
             pointToHeading.reset();
         }));
