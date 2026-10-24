@@ -131,7 +131,8 @@ public class RobotContainer {
             headingSnap.cancel();
         }));
         // Test feature: right stick points the intake instead of setting a turn rate.
-        driver.rightStick().onTrue(Commands.runOnce(() -> {
+        // Toggled by Y (the Flydigi Z button, mapped to Y in Space Station).
+        driver.y().onTrue(Commands.runOnce(() -> {
             pointToHeadingEnabled = !pointToHeadingEnabled;
             pointToHeading.reset();
         }));
